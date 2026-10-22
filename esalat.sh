@@ -2,7 +2,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 #  esalat-tunnel — one-script installer / manager
 #
-#    curl -fsSL https://raw.githubusercontent.com/<owner>/esalat-tunnel/main/esalat.sh | bash
+#    curl -fsSL https://raw.githubusercontent.com/Mehrvarz24/esalat-tunnel/main/esalat.sh | bash
 #
 #  Installs the easalt binary, writes a hardened systemd unit, tunes the host
 #  (BBR, fq, socket buffers, DNS) and manages the link between an Iran box and
