@@ -12,8 +12,10 @@
 set -euo pipefail
 
 VERSION="1.0.0"
-GH_REPO="${ESALAT_REPO:-esalat-tunnel/esalat-tunnel}"
-BIN_URL="${ESALAT_BIN_URL:-https://github.com/${GH_REPO}/releases/latest/download/easalt}"
+GH_REPO="${ESALAT_REPO:-Mehrvarz24/esalat-tunnel}"
+ARCH="$(uname -m)"
+case "$ARCH" in x86_64|amd64) ARCH=amd64 ;; aarch64|arm64) ARCH=arm64 ;; esac
+BIN_URL="${ESALAT_BIN_URL:-https://github.com/${GH_REPO}/releases/latest/download/easalt-linux-${ARCH}}"
 BIN=/usr/local/bin/easalt
 CONF_DIR=/etc/easalt
 STATE_DIR=/var/lib/esalat

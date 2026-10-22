@@ -25,12 +25,12 @@ configuration and nothing is exposed on the abroad box except the tunnel port.
 
 ```bash
 # abroad box (tunnel server)
-curl -fsSL https://raw.githubusercontent.com/<owner>/esalat-tunnel/main/esalat.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/Mehrvarz24/esalat-tunnel/main/esalat.sh | sudo bash
 #   → menu: 1) install → role: abroad → protocol: tls → port: 440
 #   note the token and the server pin it prints
 
 # iran box (tunnel client)
-curl -fsSL https://raw.githubusercontent.com/<owner>/esalat-tunnel/main/esalat.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/Mehrvarz24/esalat-tunnel/main/esalat.sh | sudo bash
 #   → menu: 1) install → role: iran → paste the abroad IP, the same token, the pin
 ```
 
