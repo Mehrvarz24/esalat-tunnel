@@ -23,12 +23,25 @@ IP سرور خارج هیچ‌وقت در کانفیگ کسی نمی‌آید.
 
 ## نصب (هر سرور یک نقش)
 
-```bash
-# روی سرور خارج (سرور تانل)
-sudo ./install.sh abroad --link-port 440 --tune
+**همان یک دستور روی هر دو سرور** اجرا می‌شود؛ فقط منو می‌پرسد این سرور کدام طرف است.
+هر پورتی آزاد باشد درست است — عدد ۴۴۰ فقط یک مثال است:
 
-# روی سرور ایران (کلاینت) — همان توکنی که بالا چاپ شد
-sudo ./install.sh iran --server <IP-خارج> --link-port 440 --target 127.0.0.1:8443 --tune
+```bash
+# روی هر دو سرور (اول خارج، بعد ایران)
+curl -fsSL https://raw.githubusercontent.com/Mehrvarz24/esalat-tunnel/main/esalat.sh | sudo bash
+#   1) install → این سرور کدام طرف است؟ abroad یا iran
+#     خارج: پروتکل، پورت (هر پورت آزادی)، decoy → توکن و pin چاپ می‌شود
+#     ایران: IP سرور خارج، همان پورت، همان توکن، pin، مقصد، تعداد سشن
+```
+
+غیرتعاملی با پورت دلخواه (مثلاً ۸۴۴۳):
+
+```bash
+# سرور خارج
+curl -fsSL .../esalat.sh | sudo bash -s install abroad --transport ws --port 8443 --tune
+# سرور ایران
+curl -fsSL .../esalat.sh | sudo bash -s install iran --server <IP-خارج> \
+     --transport ws --port 8443 --listen :8443 --target 127.0.0.1:8443 --token <TOKEN> --pin <PIN> --tune
 ```
 
 `install.sh` این کارها را می‌کند:

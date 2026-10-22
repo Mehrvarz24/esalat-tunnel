@@ -51,19 +51,25 @@ die()  { printf '%s✗%s %s\n' "$C_ERR" "$C_0" "$*" >&2; exit 1; }
 hr()   { printf '%s%s%s\n' "$C_DIM" "────────────────────────────────────────────────────────────" "$C_0"; }
 
 # interactive input that also works under `curl | bash`.
-# A real terminal (stdout is a tty) gets prompted on /dev/tty; anything else
-# (CI, `curl | bash` in a script, this test harness) silently takes defaults so
-# the installer never hangs waiting for input that cannot arrive.
+# The terminal test has to happen HERE, at top level: ask() is called inside a
+# command substitution, and a subshell's stdout is a pipe, so `[[ -t 1 ]]`
+# evaluated inside it would always be false and every question would silently
+# take its default.
+INTERACTIVE=0
+TTY_IN=""
+if [[ "${ESALAT_NONINTERACTIVE:-0}" != 1 ]]; then
+  if [[ -t 1 || -t 2 ]]; then
+    if [[ -r /dev/tty ]]; then TTY_IN=/dev/tty; INTERACTIVE=1
+    elif [[ -t 0 ]]; then TTY_IN=/dev/stdin; INTERACTIVE=1; fi
+  fi
+fi
+
 ask() { # ask <prompt> <default> -> echoes answer
   local p="$1" d="${2:-}" a=""
-  if [[ "${ESALAT_NONINTERACTIVE:-0}" == 1 || ! -t 1 ]]; then
+  if [[ "$INTERACTIVE" != 1 ]]; then
     printf '%s' "$d"; return
   fi
-  if [[ -t 0 ]]; then
-    read -r -p "$(printf '%s%s%s%s' "$C_B" "$p" "$C_0" "${d:+ [$d]}") " a || true
-  elif [[ -r /dev/tty ]]; then
-    read -r -p "$(printf '%s%s%s%s' "$C_B" "$p" "$C_0" "${d:+ [$d]}") " a < /dev/tty || true
-  fi
+  read -r -p "$(printf '%s%s%s%s' "$C_B" "$p" "$C_0" "${d:+ [$d]}") " a < "$TTY_IN" || true
   printf '%s' "${a:-$d}"
 }
 

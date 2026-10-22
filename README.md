@@ -23,24 +23,32 @@ configuration and nothing is exposed on the abroad box except the tunnel port.
 
 ## Quick start
 
-```bash
-# abroad box (tunnel server)
-curl -fsSL https://raw.githubusercontent.com/Mehrvarz24/esalat-tunnel/main/esalat.sh | sudo bash
-#   → menu: 1) install → role: abroad → protocol: tls → port: 440
-#   note the token and the server pin it prints
-
-# iran box (tunnel client)
-curl -fsSL https://raw.githubusercontent.com/Mehrvarz24/esalat-tunnel/main/esalat.sh | sudo bash
-#   → menu: 1) install → role: iran → paste the abroad IP, the same token, the pin
-```
-
-Non-interactive:
+**The same one-liner runs on both boxes** — the menu asks which side this machine
+is (that is the only difference), and any port works; 440 in these examples is
+just a habit:
 
 ```bash
-sudo ./esalat.sh install abroad --transport ws --port 440 --tune
-sudo ./esalat.sh install iran --server 203.0.113.10 --transport ws --port 440 \
-     --listen :440 --target 127.0.0.1:8443 --token <token> --pin <pin> --tune
+# on each machine (abroad first, then iran)
+curl -fsSL https://raw.githubusercontent.com/Mehrvarz24/esalat-tunnel/main/esalat.sh | sudo bash
+#   menu → 1) install → which side is this box? [abroad/iran]
+#     abroad: protocol, port (any free port — 443, 8443, 2053, ...), decoys
+#             → prints the token and the server pin
+#     iran  : abroad IP, the same port, the same token, the pin, target, sessions
 ```
+
+Prefer a different port? Answer the `tunnel port` prompt, or pass it up front:
+
+```bash
+# abroad box
+curl -fsSL .../esalat.sh | sudo bash -s install abroad --transport ws --port 8443 --tune
+# iran box
+curl -fsSL .../esalat.sh | sudo bash -s install iran --server 203.0.113.10 \
+     --transport ws --port 8443 --listen :8443 --target 127.0.0.1:8443 \
+     --token <token> --pin <pin> --tune
+```
+
+The port is simply the number both ends agree on; it only has to be free on each
+box. Clients connect to the **Iran IP with that port**.
 
 Other commands:
 
