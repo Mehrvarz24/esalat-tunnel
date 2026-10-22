@@ -39,15 +39,15 @@ ${C_GOLD}
    ██╔══╝   ╚════██║ ██╔══██║ ██║     ██╔══██║    ██║
    ███████╗ ███████║ ██║  ██║ ███████╗██║  ██║    ██║
    ╚══════╝ ╚══════╝ ╚═╝  ╚═╝ ╚══════╝╚═╝  ╚═╝    ╚═╝
-${C_0}${C_DIM}      🔒 t u n n e l 🔒   Iran ⇄ abroad · one port · no trace
-      v${VERSION} · tls / websocket · decoy fallback · no telemetry${C_0}
+${C_0}${C_DIM}        · t u n n e l ·   Iran ⇄ abroad, one port, no trace
+        version ${VERSION} · tls / websocket · decoy fallback${C_0}
 EOF
 }
 
 say()  { printf '%s\n' "$*"; }
-ok()   { printf '%s✅%s %s\n' "$C_OK" "$C_0" "$*"; }
-warn() { printf '%s⚠️%s %s\n' "$C_WARN" "$C_0" "$*"; }
-die()  { printf '%s❌%s %s\n' "$C_ERR" "$C_0" "$*" >&2; exit 1; }
+ok()   { printf '%s✓%s %s\n' "$C_OK" "$C_0" "$*"; }
+warn() { printf '%s!%s %s\n' "$C_WARN" "$C_0" "$*"; }
+die()  { printf '%s✗%s %s\n' "$C_ERR" "$C_0" "$*" >&2; exit 1; }
 hr()   { printf '%s%s%s\n' "$C_DIM" "────────────────────────────────────────────────────────────" "$C_0"; }
 
 # interactive input that also works under `curl | bash`.
@@ -78,7 +78,7 @@ need_root() { [[ "$(id -u)" == 0 ]] || die "run as root (sudo)"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 install_deps() {
-  say "${C_DIM}📦 installing deps…${C_0}"
+  say "${C_DIM}installing deps…${C_0}"
   if have apt-get; then
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq >/dev/null 2>&1 || true
@@ -95,7 +95,7 @@ fetch_binary() {
   local src="$1"
   if [[ -n "$src" && -f "$src" ]]; then install -m 0755 "$src" "$BIN"; ok "installed local binary → $BIN"; return; fi
   have curl || die "curl is required to download the binary"
-  say "${C_DIM}⬇️  downloading $BIN_URL${C_0}"
+  say "${C_DIM}downloading $BIN_URL${C_0}"
   local tmp; tmp="$(mktemp)"
   if curl -fsSL --retry 3 -o "$tmp" "$BIN_URL"; then
     install -m 0755 "$tmp" "$BIN"; rm -f "$tmp"; ok "installed $BIN"
@@ -129,11 +129,11 @@ cmd_install() {
 
   [[ "$role" == abroad || "$role" == iran ]] || die "role must be abroad or iran"
   hr
-  if [[ "$role" == abroad ]]; then say "🌍 ${C_B}role${C_0}     abroad (tunnel server)"; else say "🇮🇷 ${C_B}role${C_0}     iran (tunnel client)"; fi
+  if [[ "$role" == abroad ]]; then say "${C_B}role${C_0}     abroad (tunnel server)"; else say "${C_B}role${C_0}     iran (tunnel client)"; fi
 
   transport="$(ask "protocol [tls/ws/tcp]" "${transport:-tls}")"
   [[ "$transport" =~ ^(tls|ws|tcp)$ ]] || die "protocol must be tls, ws or tcp"
-  [[ "$transport" == tcp ]] && warn "tcp has no encryption — testing only 🧪"
+  [[ "$transport" == tcp ]] && warn "tcp has no encryption — testing only"
 
   port="$(ask "tunnel port" "${port:-$DEFAULT_PORT}")"
   [[ "$port" =~ ^[0-9]+$ ]] || die "port must be a number"
@@ -198,7 +198,7 @@ EASALT_STATS=127.0.0.1:9100
 EOF
   fi
   chmod 0600 "$existing"
-  ok "config → $existing 🔐"
+  ok "config → $existing"
 
   if [[ "${ESALAT_NO_SYSTEMD:-0}" == 1 ]]; then
     warn "ESALAT_NO_SYSTEMD=1 — skipping unit + service start"
@@ -207,8 +207,8 @@ EOF
     systemctl daemon-reload
     systemctl enable --now "easalt-$role" >/dev/null 2>&1 || true
     sleep 1
-    if systemctl is-active --quiet "easalt-$role"; then ok "easalt-$role is running 🟢"
-    else warn "service did not start — journalctl -u easalt-$role -n 30 🔴"; fi
+    if systemctl is-active --quiet "easalt-$role"; then ok "easalt-$role is running"
+    else warn "service did not start — journalctl -u easalt-$role -n 30"; fi
   fi
 
   if [[ "$tune" == 1 && "${ESALAT_NO_SYSTEMD:-0}" != 1 ]]; then
@@ -259,36 +259,35 @@ SystemCallArchitectures=native
 [Install]
 WantedBy=multi-user.target
 EOF
-  ok "systemd unit → $unit 🛠️"
+  ok "unit → $unit"
 }
 
 cmd_pin() {
   if [[ -x "$BIN" ]]; then
     local p; p="$("$BIN" pin -cert-dir "$STATE_DIR" 2>&1 | sed 's/.*: //' || true)"
-    [[ -n "$p" ]] && say "🔐 ${C_B}server pin${C_0}  $p   ${C_DIM}(paste this on the iran side)${C_0}"
+    [[ -n "$p" ]] && say "${C_B}server pin${C_0}  $p   ${C_DIM}(paste this on the iran side)${C_0}"
   fi
 }
 
 show_summary() {
   local role="$1" c="$CONF_DIR/$role.env"
   hr
-  say "🎉 ${C_B}summary${C_0}"
-  say "  📌 role      : $role"
-  say "  🔑 token     : $(read_conf_value "$c" EASALT_TOKEN)"
-  say "  📡 protocol  : $(read_conf_value "$c" EASALT_TRANSPORT)"
-  say "  🔌 port      : $(read_conf_value "$c" EASALT_LISTEN)"
+  say "${C_B}summary${C_0}"
+  say "  role      : $role"
+  say "  token     : $(read_conf_value "$c" EASALT_TOKEN)"
+  say "  protocol  : $(read_conf_value "$c" EASALT_TRANSPORT)"
+  say "  port      : $(read_conf_value "$c" EASALT_LISTEN)"
   if [[ "$role" == iran ]]; then
-    say "  🌍 server    : $(read_conf_value "$c" EASALT_SERVER)"
-    say "  🎯 target    : $(read_conf_value "$c" EASALT_TARGET)"
-    say "  👥 clients connect to this box on port $(read_conf_value "$c" EASALT_LISTEN | tr -d ':')"
+    say "  server    : $(read_conf_value "$c" EASALT_SERVER)"
+    say "  target    : $(read_conf_value "$c" EASALT_TARGET)"
+    say "  clients connect to this box on port $(read_conf_value "$c" EASALT_LISTEN | tr -d ':')"
   else
-    say "  🛡️  allow     : $(read_conf_value "$c" EASALT_ALLOW)   🎭 decoy: $(read_conf_value "$c" EASALT_DECOY)"
-    say "  ➡️  next      : run this script on the iran box, role=iran, same token"
+    say "  allow     : $(read_conf_value "$c" EASALT_ALLOW)   decoy: $(read_conf_value "$c" EASALT_DECOY)"
+    say "  next      : run this script on the iran box, role=iran, same token"
   fi
   hr
-  say "${C_DIM}📊 status: systemctl status easalt-$role${C_0}"
-  say "${C_DIM}📜 logs  : journalctl -u easalt-$role -f${C_0}"
-  say "${C_DIM}📈 stats : curl -s 127.0.0.1:$([[ "$role" == iran ]] && echo 9100 || echo 9101)/stats${C_0}"
+  say "${C_DIM}status: systemctl status easalt-$role · logs: journalctl -u easalt-$role -f"
+  say "stats : curl -s 127.0.0.1:$([[ "$role" == iran ]] && echo 9100 || echo 9101)/stats${C_0}"
 }
 
 # ── other commands ────────────────────────────────────────────────────────────
@@ -296,15 +295,13 @@ cmd_status() {
   hr
   for u in "${UNITS[@]}"; do
     if systemctl list-unit-files | grep -q "^$u.service"; then
-      local st; st="$(systemctl is-active "$u" 2>/dev/null || echo unknown)"
-      local icon="🔴"; [[ "$st" == active ]] && icon="🟢"
-      printf '%s %-14s %s\n' "$icon" "$u" "$st"
+      printf '%-14s %s\n' "$u" "$(systemctl is-active "$u" 2>/dev/null || echo unknown)"
     fi
   done
   hr
   for p in 9100 9101; do
     local j; j="$(curl -s -m 2 "http://127.0.0.1:$p/stats" || true)"
-    [[ -n "$j" ]] && say "📈 $([[ $p == 9100 ]] && echo client || echo server)  $p : $j"
+    [[ -n "$j" ]] && say "$([[ $p == 9100 ]] && echo client || echo server) $p : $j"
   done
   [[ -x "$BIN" ]] && say "binary   : $($BIN -h 2>&1 | head -0; echo "$BIN ($(stat -c%s "$BIN") bytes)")"
 }
@@ -316,7 +313,7 @@ cmd_uninstall() {
   for u in "${UNITS[@]}"; do
     if systemctl list-unit-files | grep -q "^$u.service"; then
       systemctl disable --now "$u" >/dev/null 2>&1 || true
-      ok "stopped and disabled $u 🧹"
+      ok "stopped and disabled $u"
     fi
   done
   if [[ "$purge" == "--purge" ]]; then
@@ -324,11 +321,11 @@ cmd_uninstall() {
     rm -rf "$CONF_DIR" "$STATE_DIR"
     rm -f /usr/local/bin/easalt /etc/sysctl.d/99-esalat.conf /etc/security/limits.d/99-esalat.conf
     systemctl daemon-reload
-    ok "removed binary, configs, state and tuning 🗑️"
+    ok "removed binary, configs, state and tuning"
   else
     rm -f /etc/systemd/system/easalt-*.service
     systemctl daemon-reload
-    ok "units removed; config kept in $CONF_DIR (add --purge to wipe everything) 📁"
+    ok "units removed; config kept in $CONF_DIR (add --purge to wipe everything)"
   fi
 }
 
@@ -375,11 +372,11 @@ EOF
 root soft nofile 1048576
 root hard nofile 1048576
 EOF
-  ok "tuned ⚡ $(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo n/a) / $(sysctl -n net.core.default_qdisc 2>/dev/null || echo n/a) · fd limit raised"
+  ok "tuned: $(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo n/a) / $(sysctl -n net.core.default_qdisc 2>/dev/null || echo n/a), fd limit raised"
   if have getent; then
-    if getent hosts github.com >/dev/null 2>&1; then ok "dns answers 🌐"
+    if getent hosts github.com >/dev/null 2>&1; then ok "dns answers"
     else
-      warn "dns is not answering — writing fallback resolvers 🌐"
+      warn "dns is not answering — writing fallback resolvers"
       printf 'nameserver 1.1.1.1\nnameserver 9.9.9.9\noptions timeout:2 attempts:2\n' > /etc/resolv.conf
     fi
   fi
@@ -389,15 +386,15 @@ EOF
 cmd_menu() {
   banner
   hr
-  say "${C_B}1${C_0}) 🚀 install      ${C_DIM}abroad or iran node${C_0}"
-  say "${C_B}2${C_0}) 📊 status       ${C_DIM}services + live stats${C_0}"
-  say "${C_B}3${C_0}) ⚡ tune host    ${C_DIM}BBR, fq, buffers, dns${C_0}"
-  say "${C_B}4${C_0}) 🔑 regenerate token"
-  say "${C_B}5${C_0}) 🧹 uninstall    ${C_DIM}keep config${C_0}"
-  say "${C_B}6${C_0}) 🗑️  purge        ${C_DIM}remove everything${C_0}"
-  say "${C_B}7${C_0}) 👋 exit"
+  say "${C_B}1${C_0}) install      ${C_DIM}abroad or iran node${C_0}"
+  say "${C_B}2${C_0}) status       ${C_DIM}services + live stats${C_0}"
+  say "${C_B}3${C_0}) tune host    ${C_DIM}BBR, fq, buffers, dns${C_0}"
+  say "${C_B}4${C_0}) regenerate token"
+  say "${C_B}5${C_0}) uninstall    ${C_DIM}keep config${C_0}"
+  say "${C_B}6${C_0}) purge        ${C_DIM}remove everything${C_0}"
+  say "${C_B}7${C_0}) exit"
   hr
-  local choice; choice="$(ask "👉 choose" "1")"
+  local choice; choice="$(ask "choose" "1")"
   case "$choice" in
     1)
       local role; role="$(ask "which side is this box? [abroad/iran]" "abroad")"
@@ -413,7 +410,7 @@ cmd_menu() {
         [[ -f "$f" ]] || continue
         sed -i "s|^EASALT_TOKEN=.*|EASALT_TOKEN=$t|" "$f"
         systemctl restart "easalt-$r" >/dev/null 2>&1 || true
-        ok "new token for $r 🔑 — update the other side too"
+        ok "new token for $r — update the other side too"
       done
       say "token: $t" ;;
     5) cmd_uninstall ;;
