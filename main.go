@@ -286,6 +286,7 @@ func runClient(args []string) {
 	fs.StringVar(&common.sni, "sni", "www.microsoft.com", "SNI to send")
 	fs.StringVar(&common.pin, "pin", "", "expected server SPKI pin (recommended)")
 	fs.StringVar(&common.statsAddr, "stats", "127.0.0.1:9100", "stats listener (empty to disable)")
+	fs.StringVar(&common.wsHost, "ws-host", "", "Host header for the ws upgrade (default: -sni)")
 	fs.StringVar(&common.transport, "transport", "tls", "tls | ws (websocket upgrade, looks like normal wss) | tcp (no TLS, testing only)")
 	fs.StringVar(&common.wsPath, "ws-path", "/ws", "websocket upgrade path (transport=ws)")
 	_ = fs.Parse(args)
