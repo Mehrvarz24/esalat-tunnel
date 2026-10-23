@@ -90,6 +90,7 @@ need_root() { [[ "$(id -u)" == 0 ]] || die "run as root (sudo)"; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 install_deps() {
+  [[ "${ESALAT_SKIP_DEPS:-0}" == 1 ]] && return 0
   printf '  %s▸%s installing deps\n' "$C_GOLD" "$C_0"
   if have apt-get; then
     export DEBIAN_FRONTEND=noninteractive
@@ -299,7 +300,6 @@ show_summary() {
     row decoy "$(read_conf_value "$c" EASALT_DECOY)"
     row next "run this script on the iran box, same token"
   fi
-  hr
   hr
   row logs "journalctl -u easalt-$role -f"
   row stats "curl -s 127.0.0.1:$([[ "$role" == iran ]] && echo 9100 || echo 9101)/stats"
