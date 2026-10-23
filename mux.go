@@ -853,26 +853,28 @@ func (s *Server) handle(raw net.Conn) {
 	s.trackSession(sess)
 	defer s.untrackSession(sess)
 
-	// first frame must be AUTH
 	var h [hdrLen]byte
 	if _, err := io.ReadFull(sess.rw, h[:]); err != nil {
 		return
 	}
-	if h[0] != fAuth {
-		s.errors.Add(1)
-		return
+	consumed := append([]byte(nil), h[:]...)
+	n := 0
+	if h[0] == fAuth {
+		n = int(binary.LittleEndian.Uint32(h[6:]))
 	}
-	n := int(binary.LittleEndian.Uint32(h[6:]))
-	if n < 3+len(s.token) || n > 4096 {
-		s.errors.Add(1)
-		return
+	authed := h[0] == fAuth && n >= 3+len(s.token) && n <= 4096
+	var body []byte
+	if authed {
+		body = make([]byte, n)
+		if _, err := io.ReadFull(sess.rw, body); err != nil {
+			return
+		}
+		consumed = append(consumed, body...)
+		authed = string(body[:3]) == "ET1" && constTimeEq(body[3:3+len(s.token)], s.token)
 	}
-	body := make([]byte, n)
-	if _, err := io.ReadFull(sess.rw, body); err != nil {
-		return
-	}
-	if string(body[:3]) != "ET1" || !constTimeEq(body[3:3+len(s.token)], s.token) {
+	if !authed {
 		s.errors.Add(1)
+		s.decoyPipePrefixed(conn, sess.rw.Reader, consumed)
 		return
 	}
 	go sess.Serve()

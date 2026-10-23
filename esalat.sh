@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION="1.0.3"
+VERSION="1.0.4"
 GH_REPO="${ESALAT_REPO:-Mehrvarz24/esalat-tunnel}"
 ARCH="$(uname -m)"
 case "$ARCH" in x86_64|amd64) ARCH=amd64 ;; aarch64|arm64) ARCH=arm64 ;; esac
@@ -227,9 +227,9 @@ write_unit() {
   local unit="/etc/systemd/system/easalt-$role.service"
   local exec
   if [[ "$role" == abroad ]]; then
-    exec='/usr/local/bin/easalt server -listen ${EASALT_LISTEN} -token ${EASALT_TOKEN} -transport ${EASALT_TRANSPORT} -ws-path ${EASALT_WS_PATH} -allow ${EASALT_ALLOW} -decoy ${EASALT_DECOY} -decoy-tls ${EASALT_DECOY_TLS} -sni ${EASALT_SNI} -stats ${EASALT_STATS}'
+    exec='/usr/local/bin/easalt server -listen=${EASALT_LISTEN} -token=${EASALT_TOKEN} -transport=${EASALT_TRANSPORT} -ws-path=${EASALT_WS_PATH} -allow=${EASALT_ALLOW} -decoy=${EASALT_DECOY} -decoy-tls=${EASALT_DECOY_TLS} -sni=${EASALT_SNI} -stats=${EASALT_STATS}'
   else
-    exec='/usr/local/bin/easalt client -server ${EASALT_SERVER} -link-port ${EASALT_LINK_PORT} -token ${EASALT_TOKEN} -transport ${EASALT_TRANSPORT} -ws-path ${EASALT_WS_PATH} -listen ${EASALT_LISTEN} -target ${EASALT_TARGET} -sessions ${EASALT_SESSIONS} -sni ${EASALT_SNI} -pin ${EASALT_PIN} -stats ${EASALT_STATS} -udp=${EASALT_UDP} -udp-target ${EASALT_UDP_TARGET}'
+    exec='/usr/local/bin/easalt client -server=${EASALT_SERVER} -link-port=${EASALT_LINK_PORT} -token=${EASALT_TOKEN} -transport=${EASALT_TRANSPORT} -ws-path=${EASALT_WS_PATH} -listen=${EASALT_LISTEN} -target=${EASALT_TARGET} -sessions=${EASALT_SESSIONS} -sni=${EASALT_SNI} -pin=${EASALT_PIN} -stats=${EASALT_STATS} -udp=${EASALT_UDP} -udp-target=${EASALT_UDP_TARGET}'
   fi
   cat > "$unit" <<EOF
 [Unit]
@@ -266,9 +266,17 @@ EOF
 }
 
 cmd_pin() {
-  if [[ -x "$BIN" ]]; then
-    local p; p="$("$BIN" pin -cert-dir "$STATE_DIR" 2>&1 | sed 's/.*: //' || true)"
-    [[ -n "$p" ]] && row pin "$p   ${C_DIM}(paste this on the iran side)${C_0}"
+  [[ -x "$BIN" ]] || return 0
+  local p=""
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    p="$("$BIN" pin -cert-dir "$STATE_DIR" 2>&1 | sed 's/.*: //' || true)"
+    [[ -n "$p" ]] && break
+    sleep 1
+  done
+  if [[ -n "$p" ]]; then
+    row pin "$p   ${C_DIM}(paste this on the iran side)${C_0}"
+  else
+    warn "no certificate yet — run: $BIN pin -cert-dir $STATE_DIR"
   fi
 }
 
