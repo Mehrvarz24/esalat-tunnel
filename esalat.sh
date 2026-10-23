@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION="1.0.5"
+VERSION="1.0.6"
 GH_REPO="${ESALAT_REPO:-Mehrvarz24/esalat-tunnel}"
 ARCH="$(uname -m)"
 case "$ARCH" in x86_64|amd64) ARCH=amd64 ;; aarch64|arm64) ARCH=arm64 ;; esac
@@ -53,22 +53,31 @@ row()   { printf '  %s%-10s%s %s\n' "$C_DIM" "$1" "$C_0" "$2"; }
 hr()    { rule; }
 
 INTERACTIVE=0
-TTY_IN=""
+TTY_IN=/dev/null
+TTY_OUT=/dev/null
 if [[ "${ESALAT_NONINTERACTIVE:-0}" != 1 ]]; then
-  if [[ -t 1 || -t 2 ]]; then
-    if [[ -r /dev/tty ]]; then TTY_IN=/dev/tty; INTERACTIVE=1
-    elif [[ -t 0 ]]; then TTY_IN=/dev/stdin; INTERACTIVE=1; fi
+  if [[ -r /dev/tty ]]; then
+    TTY_IN=/dev/tty
+    TTY_OUT=/dev/tty
+    INTERACTIVE=1
+  elif [[ -t 0 && -t 1 ]]; then
+    TTY_IN=/dev/stdin
+    TTY_OUT=/dev/stdout
+    INTERACTIVE=1
   fi
 fi
 
-ask() { # ask <prompt> <default> -> echoes answer
-  local p="$1" d="${2:-}" a=""
-  if [[ "$INTERACTIVE" != 1 ]]; then
-    printf '%s' "$d"; return
-  fi
+ASKED=""
+ask() {
+  local p="$1" d="${2:-}"
+  ASKED="$d"
+  [[ "$INTERACTIVE" == 1 ]] || return 0
   [[ "$p" == *"["* ]] || p="$p${d:+ [$d]}"
-  read -r -p "$(printf '%s%s%s › ' "$C_B" "$p" "$C_0")" a < "$TTY_IN" || true
-  printf '%s' "${a:-$d}"
+  printf '%s%s%s › ' "$C_B" "$p" "$C_0" > "$TTY_OUT"
+  local a=""
+  IFS= read -r a < "$TTY_IN" || true
+  [[ -n "$a" ]] && ASKED="$a"
+  return 0
 }
 
 need_root() { [[ "$(id -u)" == 0 ]] || die "run as root (sudo)"; }
@@ -117,7 +126,7 @@ gen_token() { head -c 32 /dev/urandom | base64 | tr -d '=+/' | head -c 40; }
 read_conf_value() { [[ -f "$1" ]] && grep -E "^$2=" "$1" | cut -d= -f2- || true; }
 
 cmd_install() {
-  local role="$1" transport= port= server= token= target= sessions=4 pin= sni= decoy= decoy_tls= ws_path= tune=1 bin="" listen="" udp=0 udp_target=""
+  local role="$1" transport= port= server= token= target= sessions=4 pin= sni= decoy= decoy_tls= ws_path= ws_host= tune=1 bin="" listen="" udp=0 udp_target=""
   shift || true
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -126,7 +135,8 @@ cmd_install() {
       --target) target="$2"; shift 2;; --sessions) sessions="$2"; shift 2;;
       --pin) pin="$2"; shift 2;; --sni) sni="$2"; shift 2;;
       --decoy) decoy="$2"; shift 2;; --decoy-tls) decoy_tls="$2"; shift 2;;
-      --ws-path) ws_path="$2"; shift 2;; --listen) listen="$2"; shift 2;;
+      --ws-path) ws_path="$2"; shift 2;; --ws-host) ws_host="$2"; shift 2;;
+      --listen) listen="$2"; shift 2;;
       --udp) udp=1; shift;; --udp-target) udp_target="$2"; shift 2;;
       --no-tune) tune=0; shift;;
       --tune) tune=1; shift;; --bin) bin="$2"; shift 2;;
@@ -139,33 +149,34 @@ cmd_install() {
   head_ "install"
   if [[ "$role" == abroad ]]; then row role "abroad  (tunnel server)"; else row role "iran  (tunnel client)"; fi
 
-  transport="$(ask "protocol [tls / ws / tcp]" "${transport:-tls}")"
+  ask "protocol [tls / ws / tcp]" "${transport:-tls}"; transport="$ASKED"
   [[ "$transport" =~ ^(tls|ws|tcp)$ ]] || die "protocol must be tls, ws or tcp"
   [[ "$transport" == tcp ]] && warn "tcp has no encryption — testing only"
 
-  port="$(ask "tunnel port" "${port:-$DEFAULT_PORT}")"
+  ask "tunnel port" "${port:-$DEFAULT_PORT}"; port="$ASKED"
   [[ "$port" =~ ^[0-9]+$ ]] || die "port must be a number"
-  [[ "$transport" == ws ]] && ws_path="$(ask "websocket path" "${ws_path:-$DEFAULT_WS_PATH}")"
-  if [[ "$role" == iran ]]; then listen="$(ask "user-facing listen" "${listen:-:$port}")"; else listen=":$port"; fi
+  [[ "$transport" == ws ]] && ask "websocket path" "${ws_path:-$DEFAULT_WS_PATH}"; ws_path="$ASKED"
+  [[ "$transport" == ws ]] && ask "websocket host header (optional)" "${ws_host:-}"; ws_host="$ASKED"
+  if [[ "$role" == iran ]]; then ask "user-facing listen" "${listen:-:$port}"; listen="$ASKED"; else listen=":$port"; fi
   [[ -z "$ws_path" ]] && ws_path="$DEFAULT_WS_PATH"
 
   if [[ "$role" == iran ]]; then
-    server="$(ask "abroad server ip" "$server")"
+    ask "abroad server ip" "$server"; server="$ASKED"
     [[ -n "$server" ]] || die "abroad server address is required"
-    target="$(ask "target on the abroad box" "${target:-$DEFAULT_TARGET}")"
-    sessions="$(ask "parallel sessions" "${sessions:-4}")"
-    pin="$(ask "server pin (optional)" "${pin:-}")"
+    ask "target on the abroad box" "${target:-$DEFAULT_TARGET}"; target="$ASKED"
+    ask "parallel sessions" "${sessions:-4}"; sessions="$ASKED"
+    ask "server pin (optional)" "${pin:-}"; pin="$ASKED"
     if [[ "$udp" != 1 ]]; then
-      local u; u="$(ask "also forward udp on this port? [y/N]" "n")"
+      local u; ask "also forward udp on this port? [y/N]" "n"; u="$ASKED"
       [[ "${u,,}" == y* ]] && udp=1
     fi
-    if [[ "$udp" == 1 ]]; then udp_target="$(ask "udp target on the abroad box" "${udp_target:-$target}")"; fi
-    sni="$(ask "sni to send" "${sni:-$DEFAULT_SNI}")"
+    if [[ "$udp" == 1 ]]; then ask "udp target on the abroad box" "${udp_target:-$target}"; udp_target="$ASKED"; fi
+    ask "sni to send" "${sni:-$DEFAULT_SNI}"; sni="$ASKED"
     decoy=""; decoy_tls=""
   else
-    decoy="$(ask "decoy · plain http" "${decoy:-$DEFAULT_DECOY}")"
-    decoy_tls="$(ask "decoy · tls" "${decoy_tls:-$DEFAULT_DECOY_TLS}")"
-    sni="$(ask "certificate name" "${sni:-$DEFAULT_SNI}")"
+    ask "decoy · plain http" "${decoy:-$DEFAULT_DECOY}"; decoy="$ASKED"
+    ask "decoy · tls" "${decoy_tls:-$DEFAULT_DECOY_TLS}"; decoy_tls="$ASKED"
+    ask "certificate name" "${sni:-$DEFAULT_SNI}"; sni="$ASKED"
   fi
 
   local existing="$CONF_DIR/$role.env"
@@ -184,6 +195,7 @@ cmd_install() {
 EASALT_TOKEN=$token
 EASALT_TRANSPORT=$transport
 EASALT_WS_PATH=$ws_path
+EASALT_WS_HOST=$ws_host
 EASALT_LISTEN=:$port
 EASALT_ALLOW=127.0.0.1
 EASALT_DECOY=$decoy
@@ -196,6 +208,7 @@ EOF
 EASALT_TOKEN=$token
 EASALT_TRANSPORT=$transport
 EASALT_WS_PATH=$ws_path
+EASALT_WS_HOST=$ws_host
 EASALT_SERVER=$server
 EASALT_LINK_PORT=$port
 EASALT_LISTEN=$listen
@@ -238,7 +251,7 @@ write_unit() {
   if [[ "$role" == abroad ]]; then
     exec='/usr/local/bin/easalt server -listen=${EASALT_LISTEN} -token=${EASALT_TOKEN} -transport=${EASALT_TRANSPORT} -ws-path=${EASALT_WS_PATH} -allow=${EASALT_ALLOW} -decoy=${EASALT_DECOY} -decoy-tls=${EASALT_DECOY_TLS} -sni=${EASALT_SNI} -stats=${EASALT_STATS}'
   else
-    exec='/usr/local/bin/easalt client -server=${EASALT_SERVER} -link-port=${EASALT_LINK_PORT} -token=${EASALT_TOKEN} -transport=${EASALT_TRANSPORT} -ws-path=${EASALT_WS_PATH} -listen=${EASALT_LISTEN} -target=${EASALT_TARGET} -sessions=${EASALT_SESSIONS} -sni=${EASALT_SNI} -pin=${EASALT_PIN} -stats=${EASALT_STATS} -udp=${EASALT_UDP} -udp-target=${EASALT_UDP_TARGET}'
+    exec='/usr/local/bin/easalt client -server=${EASALT_SERVER} -link-port=${EASALT_LINK_PORT} -token=${EASALT_TOKEN} -transport=${EASALT_TRANSPORT} -ws-path=${EASALT_WS_PATH} -ws-host=${EASALT_WS_HOST} -listen=${EASALT_LISTEN} -target=${EASALT_TARGET} -sessions=${EASALT_SESSIONS} -sni=${EASALT_SNI} -pin=${EASALT_PIN} -stats=${EASALT_STATS} -udp=${EASALT_UDP} -udp-target=${EASALT_UDP_TARGET}'
   fi
   cat > "$unit" <<EOF
 [Unit]
@@ -441,10 +454,10 @@ cmd_menu() {
     n=$((n+1))
   done
   hr
-  local choice; choice="$(ask "choose [1-7]" "1")"
+  local choice; ask "choose [1-7]" "1"; choice="$ASKED"
   case "$choice" in
     1)
-      local role; role="$(ask "which side is this box? [abroad/iran]" "abroad")"
+      local role; ask "which side is this box? [abroad/iran]" "abroad"; role="$ASKED"
       need_root
       cmd_install "$role" ;;
     2) cmd_status ;;
