@@ -1,5 +1,5 @@
 BIN := easalt
-VERSION := 1.0.0
+VERSION := 1.0.2
 DIST := dist
 
 .PHONY: build test bench release clean

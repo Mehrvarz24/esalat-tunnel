@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION="1.0.0"
+VERSION="1.0.2"
 GH_REPO="${ESALAT_REPO:-Mehrvarz24/esalat-tunnel}"
 ARCH="$(uname -m)"
 case "$ARCH" in x86_64|amd64) ARCH=amd64 ;; aarch64|arm64) ARCH=arm64 ;; esac
@@ -191,7 +191,7 @@ EASALT_SERVER=$server
 EASALT_LINK_PORT=$port
 EASALT_LISTEN=$listen
 EASALT_TARGET=$target
-EASALT_UDP=$udp
+EASALT_UDP=$([[ "$udp" == 1 ]] && echo true || echo false)
 EASALT_UDP_TARGET=${udp_target:-$target}
 EASALT_SESSIONS=$sessions
 EASALT_PIN=$pin
@@ -207,7 +207,8 @@ EOF
   else
     write_unit "$role"
     systemctl daemon-reload
-    systemctl enable --now "easalt-$role" >/dev/null 2>&1 || true
+    systemctl enable "easalt-$role" >/dev/null 2>&1 || true
+    systemctl restart "easalt-$role" >/dev/null 2>&1 || true
     sleep 1
     if systemctl is-active --quiet "easalt-$role"; then ok "service easalt-$role is running"
     else warn "service did not start · journalctl -u easalt-$role -n 30"; fi
@@ -283,7 +284,9 @@ show_summary() {
     row server "$(read_conf_value "$c" EASALT_SERVER)"
     row target "$(read_conf_value "$c" EASALT_TARGET)"
     row clients "connect to this box on port $(read_conf_value "$c" EASALT_LISTEN | tr -d ':')"
-    row udp "$(read_conf_value "$c" EASALT_UDP_TARGET) (udp on the same port)"
+    if [[ "$(read_conf_value "$c" EASALT_UDP)" == true ]]; then
+      row udp "$(read_conf_value "$c" EASALT_UDP_TARGET) (same port)"
+    fi
   else
     row allow "$(read_conf_value "$c" EASALT_ALLOW)"
     row decoy "$(read_conf_value "$c" EASALT_DECOY)"
