@@ -120,6 +120,18 @@ frames: type(1) flags(1) streamID(4) length(4), little endian
 * non-TLS traffic on the server port is proxied to the decoy host (over TLS for
   probes that already completed a TLS handshake)
 
+## Tests
+
+```bash
+bash tests/verify.sh     # installs a local pair from the published release and checks everything
+```
+
+It runs 20 checks: install through the published one-liner, version stamp,
+session count, pin consistency, 20 MB over TCP, 20 datagrams over UDP (boundary
+preserved), decoy for plain and TLS probes, wrong-token rejection, recovery after
+the peer restarts, the websocket transport, and interactive behaviour (Ctrl+C at
+a prompt, answers actually applied).
+
 ## Measured
 
 Single host, two local fake nodes, 2 vCPU:
