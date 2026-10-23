@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION="1.0.4"
+VERSION="1.0.5"
 GH_REPO="${ESALAT_REPO:-Mehrvarz24/esalat-tunnel}"
 ARCH="$(uname -m)"
 case "$ARCH" in x86_64|amd64) ARCH=amd64 ;; aarch64|arm64) ARCH=arm64 ;; esac
-BIN_URL="${ESALAT_BIN_URL:-https://github.com/${GH_REPO}/releases/latest/download/easalt-linux-${ARCH}}"
+BIN_URL="${ESALAT_BIN_URL:-https://github.com/${GH_REPO}/releases/download/v${VERSION}/easalt-linux-${ARCH}}"
+BIN_URL_FALLBACK="https://github.com/${GH_REPO}/releases/latest/download/easalt-linux-${ARCH}"
 BIN=/usr/local/bin/easalt
 CONF_DIR=/etc/easalt
 STATE_DIR=/var/lib/esalat
@@ -93,14 +94,22 @@ fetch_binary() {
   local src="$1"
   if [[ -n "$src" && -f "$src" ]]; then install -m 0755 "$src" "$BIN"; ok "installed local binary → $BIN"; return; fi
   have curl || die "curl is required to download the binary"
-  printf '  %s▸%s fetching %s\n' "$C_GOLD" "$C_0" "$BIN_URL"
   local tmp; tmp="$(mktemp)"
-  if curl -fsSL --retry 3 -o "$tmp" "$BIN_URL"; then
-    install -m 0755 "$tmp" "$BIN"; rm -f "$tmp"; ok "installed $BIN"
-  else
-    rm -f "$tmp"
-    die "download failed. Set ESALAT_BIN_URL or pass --bin /path/to/easalt (build: go build -o easalt .)"
-  fi
+  local url
+  for url in "$BIN_URL" "$BIN_URL_FALLBACK"; do
+    printf '  %s▸%s fetching %s\n' "$C_GOLD" "$C_0" "$url"
+    if curl -fsSL --retry 2 -o "$tmp" "$url"; then
+      chmod +x "$tmp"
+      local got; got="$("$tmp" version 2>/dev/null | awk '{print $2}')"
+      if [[ -n "$got" && "$got" != "$VERSION" ]]; then
+        warn "that mirror served ${got:-unknown}, wanted $VERSION · trying the next one"
+        continue
+      fi
+      install -m 0755 "$tmp" "$BIN"; rm -f "$tmp"; ok "installed $BIN (${got:-local})"; return 0
+    fi
+  done
+  rm -f "$tmp"
+  die "download failed. Set ESALAT_BIN_URL or pass --bin /path/to/easalt"
 }
 
 gen_token() { head -c 32 /dev/urandom | base64 | tr -d '=+/' | head -c 40; }
@@ -287,6 +296,7 @@ show_summary() {
   row role "$role"
   row token "$(read_conf_value "$c" EASALT_TOKEN)"
   row protocol "$(read_conf_value "$c" EASALT_TRANSPORT)"
+  row version "$("$BIN" version 2>/dev/null | awk '{print $2}')"
   row port "$(read_conf_value "$c" EASALT_LISTEN)"
   if [[ "$role" == iran ]]; then
     row server "$(read_conf_value "$c" EASALT_SERVER)"

@@ -369,11 +369,15 @@ func runClient(args []string) {
 	}
 }
 
+var version = "dev"
+
 func usage() {
 	fmt.Fprintf(os.Stderr, `esalat-tunnel
 
   easalt server -listen :440 -token <secret> [-allow 127.0.0.1] [-decoy host:port]
   easalt client -server <ip> -link-port 440 -token <secret> [-listen :440] [-target 127.0.0.1:8443]
+
+  easalt version
 
 `)
 }
@@ -385,6 +389,8 @@ func main() {
 		os.Exit(2)
 	}
 	switch os.Args[1] {
+	case "version", "-v", "--version":
+		fmt.Printf("esalat-tunnel %s\n", version)
 	case "server":
 		runServer(os.Args[2:])
 	case "client":

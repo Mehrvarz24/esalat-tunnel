@@ -1,5 +1,5 @@
 BIN := easalt
-VERSION := 1.0.4
+VERSION := 1.0.5
 DIST := dist
 
 .PHONY: build test bench release clean
@@ -12,8 +12,8 @@ vet:
 
 release: clean
 	@mkdir -p $(DIST)
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o $(DIST)/$(BIN)-linux-amd64 .
-	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o $(DIST)/$(BIN)-linux-arm64 .
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w -X main.version=$(VERSION)" -o $(DIST)/$(BIN)-linux-amd64 .
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -trimpath -ldflags="-s -w -X main.version=$(VERSION)" -o $(DIST)/$(BIN)-linux-arm64 .
 	@cp esalat.sh $(DIST)/esalat.sh
 	@for arch in amd64 arm64; do \
 	  d=$(DIST)/esalat-tunnel-$(VERSION)-linux-$$arch; mkdir -p $$d; \
