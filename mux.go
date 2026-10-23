@@ -90,13 +90,14 @@ type Session struct {
 
 func newSession(conn net.Conn) *Session {
 	return &Session{
-		conn:     conn,
-		rw:       bufio.NewReadWriter(bufio.NewReaderSize(conn, 64*1024), bufio.NewWriterSize(conn, 64*1024)),
-		writeQ:   make(chan frame, writeQCap),
-		done:     make(chan struct{}),
-		streams:  map[uint32]*Stream{},
-		acceptCh: make(chan *Stream, 64),
-		pool:     make(chan struct{}, 4096),
+		createdAt: time.Now(),
+		conn:      conn,
+		rw:        bufio.NewReadWriter(bufio.NewReaderSize(conn, 64*1024), bufio.NewWriterSize(conn, 64*1024)),
+		writeQ:    make(chan frame, writeQCap),
+		done:      make(chan struct{}),
+		streams:   map[uint32]*Stream{},
+		acceptCh:  make(chan *Stream, 64),
+		pool:      make(chan struct{}, 4096),
 	}
 }
 
@@ -561,6 +562,7 @@ type Client struct {
 	sni       string
 	transport string
 	wsPath    string
+	wsHost    string
 
 	mu      sync.Mutex
 	dialing int
@@ -643,7 +645,10 @@ func (c *Client) dial(ctx context.Context) (*Session, error) {
 		conn = tconn
 	}
 	if c.transport == "ws" {
-		host := c.sni
+		host := c.wsHost
+		if host == "" {
+			host = c.sni
+		}
 		if host == "" {
 			host = c.addr
 		}
@@ -755,7 +760,7 @@ func (c *Client) Stats() map[string]any {
 	c.up.Store(up)
 	c.down.Store(down)
 	return map[string]any{
-		"sessions_live": live, "sessions_total": len(c.all),
+		"sessions_live": live, "sessions_total": len(c.all), "sessions_want": c.sessions, "dialing": c.dialing,
 		"streams_open": streams, "bytes_up": up, "bytes_down": down,
 		"rtt_us": rtt,
 	}
@@ -897,6 +902,10 @@ func (s *Server) serveStream(st *Stream) {
 		st.CloseLocal()
 		return
 	}
+	if isUDPTarget(target) {
+		serveUDPStream(st, udpTarget(target))
+		return
+	}
 	up, err := net.DialTimeout("tcp", target, 10*time.Second)
 	if err != nil {
 		s.errors.Add(1)
@@ -908,6 +917,7 @@ func (s *Server) serveStream(st *Stream) {
 }
 
 func (s *Server) allowed(target string) bool {
+	target = udpTarget(target)
 	for _, p := range s.allow {
 		if strings.HasPrefix(target, p) {
 			return true

@@ -14,6 +14,7 @@ configuration and nothing is exposed on the abroad box except the tunnel port.
 * single ~1.2k-line Go program, standard library only
 * own multiplexer (no smux/yamux) with real per-stream flow control
 * `tls` and `ws` (websocket-upgrade, looks like ordinary `wss://`) transports
+* carries **any TCP protocol and, with `-udp`, any UDP protocol** through the same port
 * **decoy fallback**: probes and port scanners get a real website, not a dead port
 * token auth with constant-time compare, never logged
 * certificate pinning (SPKI) with a certificate that survives restarts
@@ -86,9 +87,22 @@ Client (`easalt client`):
 | `-listen` | `:440` | where users connect on this box |
 | `-target` | `127.0.0.1:8443` | service to reach on the abroad box |
 | `-sessions` | `4` | parallel connections to abroad (~1.2 Gbit/s each) |
+| `-udp` | off | also forward UDP on the same listen port (QUIC, DNS, WireGuard, game traffic) |
+| `-udp-target` | `-target` | where UDP goes on the server side |
 | `-pin` | — | expected server SPKI pin (recommended) |
-| `-transport` / `-ws-path` / `-sni` | as above | |
+| `-transport` / `-ws-path` / `-ws-host` / `-sni` | as above | |
 | `-stats` | `127.0.0.1:9100` | JSON stats listener |
+
+## Any port, any protocol
+
+The port is just a number both sides agree on: 443, 8443, 2053, 8080, anything
+free. The tunnel is transparent, so whatever you run on the abroad side works —
+TCP by default, and UDP with `-udp` on the same listen port (QUIC-based proxies,
+DNS, WireGuard, game traffic). Both directions keep packet boundaries.
+
+If the abroad box is reachable only through a hostname/SNI that the network
+allows, use `-sni` for the TLS name and `-ws-host` for the websocket Host header
+so the link looks like traffic to that name.
 
 ## Protocol
 

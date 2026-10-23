@@ -48,6 +48,7 @@ type commonCfg struct {
 	pin       string // sha256/base64 of the server SPKI
 	transport string
 	wsPath    string
+	wsHost    string
 	certDir   string
 	insecure  bool
 	statsAddr string
@@ -228,6 +229,7 @@ func runServer(args []string) {
 	fs.StringVar(&common.certDir, "cert-dir", "/var/lib/esalat", "where to keep the generated certificate (stable pin across restarts)")
 	fs.StringVar(&common.transport, "transport", "tls", "tls | ws (websocket upgrade, looks like normal wss) | tcp (no TLS, testing only)")
 	fs.StringVar(&common.wsPath, "ws-path", "/ws", "websocket upgrade path (transport=ws)")
+	fs.StringVar(&common.wsHost, "ws-host", "", "Host header for the ws upgrade (default: -sni)")
 	fs.StringVar(&common.statsAddr, "stats", "127.0.0.1:9101", "stats listener (empty to disable)")
 	allow := fs.String("allow", "127.0.0.1", "comma separated target prefixes the client may reach")
 	decoy := fs.String("decoy", "www.cloudflare.com:80", "plain-HTTP decoy for non-tunnel traffic (empty: do nothing)")
@@ -279,6 +281,8 @@ func runClient(args []string) {
 	target := fs.String("target", "127.0.0.1:8443", "target on the server side to forward to")
 	fs.StringVar(&common.token, "token", "", "shared secret (required)")
 	sessions := fs.Int("sessions", 4, "parallel TLS sessions to keep open")
+	udp := fs.Bool("udp", false, "also forward UDP on the same listen port (for QUIC, DNS, WireGuard and friends)")
+	udpTargetFlag := fs.String("udp-target", "", "where UDP goes on the server side (default: -target)")
 	fs.StringVar(&common.sni, "sni", "www.microsoft.com", "SNI to send")
 	fs.StringVar(&common.pin, "pin", "", "expected server SPKI pin (recommended)")
 	fs.StringVar(&common.statsAddr, "stats", "127.0.0.1:9100", "stats listener (empty to disable)")
@@ -294,10 +298,34 @@ func runClient(args []string) {
 	c.transport = common.transport
 	c.wsPath = common.wsPath
 	c.sni = common.sni
+	c.wsHost = common.wsHost
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	go c.EnsureSessions(ctx)
+
+	udpTarget := *udpTargetFlag
+	if udpTarget == "" {
+		udpTarget = *target
+	}
+	if *udp {
+		host, port, err := net.SplitHostPort(common.listen)
+		if err != nil {
+			log.Fatalf("client: -listen must be host:port for -udp: %v", err)
+		}
+		_ = host
+		uaddr, err := net.ResolveUDPAddr("udp", ":"+port)
+		if err != nil {
+			log.Fatalf("client: udp listen: %v", err)
+		}
+		uconn, err := net.ListenUDP("udp", uaddr)
+		if err != nil {
+			log.Fatalf("client: udp listen: %v", err)
+		}
+		fwd := newUDPForwarder(c, udpTarget)
+		go fwd.Run(uconn)
+		log.Printf("udp  %s/udp -> %s (through the same sessions)", common.listen, udpTarget)
+	}
 
 	ln, err := net.Listen("tcp", common.listen)
 	if err != nil {

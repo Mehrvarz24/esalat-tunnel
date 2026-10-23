@@ -1,14 +1,4 @@
 #!/usr/bin/env bash
-# ─────────────────────────────────────────────────────────────────────────────
-#  esalat-tunnel — one-script installer / manager
-#
-#    curl -fsSL https://raw.githubusercontent.com/Mehrvarz24/esalat-tunnel/main/esalat.sh | bash
-#
-#  Installs the easalt binary, writes a hardened systemd unit, tunes the host
-#  (BBR, fq, socket buffers, DNS) and manages the link between an Iran box and
-#  an abroad box. Everything runs from the standard library — no third-party
-#  runtime, no telemetry, no phone-home.
-# ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 VERSION="1.0.0"
@@ -61,11 +51,6 @@ head_() { printf '\n  %s%s%s\n' "$C_GOLD" "$1" "$C_0"; }
 row()   { printf '  %s%-10s%s %s\n' "$C_DIM" "$1" "$C_0" "$2"; }
 hr()    { rule; }
 
-# interactive input that also works under `curl | bash`.
-# The terminal test has to happen HERE, at top level: ask() is called inside a
-# command substitution, and a subshell's stdout is a pipe, so `[[ -t 1 ]]`
-# evaluated inside it would always be false and every question would silently
-# take its default.
 INTERACTIVE=0
 TTY_IN=""
 if [[ "${ESALAT_NONINTERACTIVE:-0}" != 1 ]]; then
@@ -122,9 +107,8 @@ gen_token() { head -c 32 /dev/urandom | base64 | tr -d '=+/' | head -c 40; }
 
 read_conf_value() { [[ -f "$1" ]] && grep -E "^$2=" "$1" | cut -d= -f2- || true; }
 
-# ── install ───────────────────────────────────────────────────────────────────
 cmd_install() {
-  local role="$1" transport= port= server= token= target= sessions=4 pin= sni= decoy= decoy_tls= ws_path= tune=1 bin="" listen=""
+  local role="$1" transport= port= server= token= target= sessions=4 pin= sni= decoy= decoy_tls= ws_path= tune=1 bin="" listen="" udp=0 udp_target=""
   shift || true
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -134,6 +118,7 @@ cmd_install() {
       --pin) pin="$2"; shift 2;; --sni) sni="$2"; shift 2;;
       --decoy) decoy="$2"; shift 2;; --decoy-tls) decoy_tls="$2"; shift 2;;
       --ws-path) ws_path="$2"; shift 2;; --listen) listen="$2"; shift 2;;
+      --udp) udp=1; shift;; --udp-target) udp_target="$2"; shift 2;;
       --no-tune) tune=0; shift;;
       --tune) tune=1; shift;; --bin) bin="$2"; shift 2;;
       *) die "unknown option: $1";;
@@ -161,6 +146,11 @@ cmd_install() {
     target="$(ask "target on the abroad box" "${target:-$DEFAULT_TARGET}")"
     sessions="$(ask "parallel sessions" "${sessions:-4}")"
     pin="$(ask "server pin (optional)" "${pin:-}")"
+    if [[ "$udp" != 1 ]]; then
+      local u; u="$(ask "also forward udp on this port? [y/N]" "n")"
+      [[ "${u,,}" == y* ]] && udp=1
+    fi
+    if [[ "$udp" == 1 ]]; then udp_target="$(ask "udp target on the abroad box" "${udp_target:-$target}")"; fi
     sni="$(ask "sni to send" "${sni:-$DEFAULT_SNI}")"
     decoy=""; decoy_tls=""
   else
@@ -169,8 +159,6 @@ cmd_install() {
     sni="$(ask "certificate name" "${sni:-$DEFAULT_SNI}")"
   fi
 
-  # an explicit --token always wins; otherwise reuse whatever this role was
-  # installed with, so re-running the installer cannot split the two ends
   local existing="$CONF_DIR/$role.env"
   if [[ -z "$token" ]]; then
     token="$(read_conf_value "$existing" EASALT_TOKEN)"
@@ -184,7 +172,6 @@ cmd_install() {
   install -d -m 0750 "$CONF_DIR"
   if [[ "$role" == abroad ]]; then
     cat > "$existing" <<EOF
-# esalat-tunnel — abroad (server)
 EASALT_TOKEN=$token
 EASALT_TRANSPORT=$transport
 EASALT_WS_PATH=$ws_path
@@ -197,7 +184,6 @@ EASALT_STATS=127.0.0.1:9101
 EOF
   else
     cat > "$existing" <<EOF
-# esalat-tunnel — iran (client)
 EASALT_TOKEN=$token
 EASALT_TRANSPORT=$transport
 EASALT_WS_PATH=$ws_path
@@ -205,6 +191,8 @@ EASALT_SERVER=$server
 EASALT_LINK_PORT=$port
 EASALT_LISTEN=$listen
 EASALT_TARGET=$target
+EASALT_UDP=$udp
+EASALT_UDP_TARGET=${udp_target:-$target}
 EASALT_SESSIONS=$sessions
 EASALT_PIN=$pin
 EASALT_SNI=$sni
@@ -240,7 +228,7 @@ write_unit() {
   if [[ "$role" == abroad ]]; then
     exec='/usr/local/bin/easalt server -listen ${EASALT_LISTEN} -token ${EASALT_TOKEN} -transport ${EASALT_TRANSPORT} -ws-path ${EASALT_WS_PATH} -allow ${EASALT_ALLOW} -decoy ${EASALT_DECOY} -decoy-tls ${EASALT_DECOY_TLS} -sni ${EASALT_SNI} -stats ${EASALT_STATS}'
   else
-    exec='/usr/local/bin/easalt client -server ${EASALT_SERVER} -link-port ${EASALT_LINK_PORT} -token ${EASALT_TOKEN} -transport ${EASALT_TRANSPORT} -ws-path ${EASALT_WS_PATH} -listen ${EASALT_LISTEN} -target ${EASALT_TARGET} -sessions ${EASALT_SESSIONS} -sni ${EASALT_SNI} -pin ${EASALT_PIN} -stats ${EASALT_STATS}'
+    exec='/usr/local/bin/easalt client -server ${EASALT_SERVER} -link-port ${EASALT_LINK_PORT} -token ${EASALT_TOKEN} -transport ${EASALT_TRANSPORT} -ws-path ${EASALT_WS_PATH} -listen ${EASALT_LISTEN} -target ${EASALT_TARGET} -sessions ${EASALT_SESSIONS} -sni ${EASALT_SNI} -pin ${EASALT_PIN} -stats ${EASALT_STATS} -udp=${EASALT_UDP} -udp-target ${EASALT_UDP_TARGET}'
   fi
   cat > "$unit" <<EOF
 [Unit]
@@ -295,6 +283,7 @@ show_summary() {
     row server "$(read_conf_value "$c" EASALT_SERVER)"
     row target "$(read_conf_value "$c" EASALT_TARGET)"
     row clients "connect to this box on port $(read_conf_value "$c" EASALT_LISTEN | tr -d ':')"
+    row udp "$(read_conf_value "$c" EASALT_UDP_TARGET) (udp on the same port)"
   else
     row allow "$(read_conf_value "$c" EASALT_ALLOW)"
     row decoy "$(read_conf_value "$c" EASALT_DECOY)"
@@ -306,22 +295,34 @@ show_summary() {
   say ""
 }
 
-# ── other commands ────────────────────────────────────────────────────────────
 cmd_status() {
   hr
   for u in "${UNITS[@]}"; do
-    if systemctl list-unit-files | grep -q "^$u.service"; then
-      local st; st="$(systemctl is-active "$u" 2>/dev/null || echo unknown)"
-      if [[ "$st" == active ]]; then printf '  %s●%s %-14s %s\n' "$C_OK" "$C_0" "$u" "$st"
-      else printf '  %s●%s %-14s %s\n' "$C_ERR" "$C_0" "$u" "$st"; fi
+    if systemctl list-unit-files 2>/dev/null | grep -q "^$u.service"; then
+      local st
+      st="$(systemctl is-active "$u" 2>/dev/null || true)"
+      [[ -n "$st" ]] || st=unknown
+      if [[ "$st" == active ]]; then
+        printf '  %s●%s %-14s %s\n' "$C_OK" "$C_0" "$u" "$st"
+      else
+        printf '  %s●%s %-14s %s\n' "$C_ERR" "$C_0" "$u" "$st"
+      fi
     fi
   done
-  hr
+  local p j label
   for p in 9100 9101; do
-    local j; j="$(curl -s -m 2 "http://127.0.0.1:$p/stats" || true)"
-    [[ -n "$j" ]] && say "  $([[ $p == 9100 ]] && echo client || echo server)  $j"
+    label=server; [[ "$p" == 9100 ]] && label=client
+    j="$(curl -s -m 2 "http://127.0.0.1:$p/stats" 2>/dev/null || true)"
+    [[ -n "$j" ]] || continue
+    say "  $label  $j"
   done
-  [[ -x "$BIN" ]] && say "binary   : $($BIN -h 2>&1 | head -0; echo "$BIN ($(stat -c%s "$BIN") bytes)")"
+  if [[ -x "$BIN" ]]; then
+    say "  binary  $BIN ($(stat -c%s "$BIN" 2>/dev/null || echo 0) bytes)"
+  else
+    warn "binary is not installed"
+  fi
+  hr
+  return 0
 }
 
 cmd_uninstall() {
@@ -356,7 +357,6 @@ cmd_tune() {
     warn "BBR not available in this kernel — skipping congestion-control change"
   fi
   cat > /etc/sysctl.d/99-esalat.conf <<'EOF'
-# esalat-tunnel node tuning
 net.ipv4.tcp_fastopen = 3
 net.ipv4.tcp_slow_start_after_idle = 0
 net.ipv4.tcp_notsent_lowat = 16384
@@ -402,6 +402,7 @@ EOF
 }
 
 cmd_menu() {
+  while true; do
   banner
   hr
   local n=1 line label desc
@@ -430,6 +431,7 @@ cmd_menu() {
     4)
       need_root
       local t; t="$(gen_token)"
+      t="${t:-$(gen_token)}"
       for r in abroad iran; do
         local f="$CONF_DIR/$r.env"
         [[ -f "$f" ]] || continue
@@ -441,8 +443,11 @@ cmd_menu() {
     5) cmd_uninstall ;;
     6) cmd_uninstall --purge ;;
     7|q|exit) exit 0 ;;
-    *) die "unknown choice" ;;
+   *) warn "unknown choice" ;;
   esac
+  printf '\n  %spress enter%s ' "$C_DIM" "$C_0"
+  read -r _ < "${TTY_IN:-/dev/null}" || true
+  done
 }
 
 usage() {
@@ -465,6 +470,9 @@ ${C_B}install options${C_0}
   --decoy HOST:PORT        plain-HTTP decoy      (abroad role)
   --decoy-tls HOST:PORT    TLS decoy             (abroad role)
   --ws-path PATH           websocket path        (transport ws)
+  --ws-host NAME           Host header for ws    (default: -sni)
+  --udp                    also forward udp on the same port
+  --udp-target HOST:PORT   udp destination        (default: --target)
   --token SECRET           shared secret         (generated if omitted)
   --bin PATH               use a local easalt binary instead of downloading
   --no-tune                skip host tuning
@@ -474,6 +482,8 @@ ${C_B}env${C_0}
   ESALAT_NO_SYSTEMD=1   write files only (tests)
 EOF
 }
+
+trap 'printf "\n"; exit 130' INT TERM
 
 main() {
   local cmd="${1:-}"
